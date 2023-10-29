@@ -1,10 +1,13 @@
 %ifndef SYSCALLS_H
 %define SYSCALLS_H
 
+%define SYSCALL_READ    0
 %define SYSCALL_WRITE   1 
 %define SYSCALL_SOCKET  41
 %define SYSCALL_CONNECT 42
 %define SYSCALL_EXIT    60
+
+%define STDOUT          1
 
 %define AF_UNIX             1
 %define SIZEOF_SOCKADDR_UN  110
