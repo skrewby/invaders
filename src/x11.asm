@@ -18,10 +18,10 @@ CPU X64 ; Target the x86_64 family of CPUs.
 section .rodata
 
 sun_path: db "/tmp/.X11-unix/X0", 0
-global sun_path:data
+static sun_path:data
 
-hello_world: db "Hello, world!"
-global hello_world:data
+window_title: db "Invaders"
+static window_title:data
 
 section .data
 id: dd 0
@@ -70,6 +70,8 @@ global x11_init:function
   call x11_create_gc
   call x11_create_window
   call x11_map_window
+  call x11_set_window_title
+  call x11_read_error
 
   set_socket_non_blocking r8
 
@@ -325,6 +327,39 @@ global x11_map_window:function
   pop rbp
   ret
 
+x11_set_window_title:
+static x11_set_window_title:function
+  push rbp
+  mov rbp, rsp
+  sub rsp, 32
+
+  mov BYTE [rsp], 18        ; ChangeProperty Opcode
+  mov BYTE [rsp + 1], 0     ; Replace
+  mov WORD [rsp + 2], 8     ; Request length 6+(n+p)/4
+  mov DWORD [rsp + 4], r13d ; Window ID
+  mov DWORD [rsp + 8], 39   ; Property: WM_NAME
+  mov DWORD [rsp + 12], 31  ; Type: String
+  mov BYTE [rsp + 16], 8    ; Format: List of 8 bits
+                            ; Unused - 3 Bytes
+  mov DWORD [rsp + 20], 8   ; Length in format units (8 * 8bits in this case)
+  
+  ; Copy window title string to stack
+  lea rsi, window_title
+  lea rdi, [rsp + 24]
+  cld
+  mov rcx, 8 
+  rep movsb
+
+  mov rax, SYSCALL_WRITE
+  mov rdi, r8
+  lea rsi, [rsp]
+  mov rdx, 32
+  syscall
+
+  add rsp, 32
+  pop rbp
+  ret
+
 failure:
 static failure:function
   exit 1
@@ -344,6 +379,30 @@ static x11_read_response:function
   add rsp, 32
   pop rbp
   ret
+
+x11_read_error:
+static x11_read_response:function
+  push rbp
+  mov rbp, rsp
+  sub rsp, 32
+
+  mov rax, SYSCALL_READ
+  mov rdi, r8
+  lea rsi, [rsp]
+  mov rdx, 32
+  syscall
+
+  mov rax, SYSCALL_WRITE
+  mov rdi, STDOUT
+  lea rsi, [rsp]
+  mov rdx, 32
+  syscall
+
+  add rsp, 32
+  pop rbp
+  ret
+
+
 
 ; Poll and respond to events from X11 server
 x11_poll_events:
