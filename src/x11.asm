@@ -1,11 +1,11 @@
 BITS 64 ; 64 bits.
 CPU X64 ; Target the x86_64 family of CPUs.
 
-; --------------------------------------------------------------------
 ; ---------------------------- REGISTERS ----------------------------- 
 ; r8:	Connection socket fd
 ; r9d:	Window Root ID
 ; r10d: Graphical Context ID
+; r12d: Colormap ID
 ; r13d: Window ID
 ; r14d: Font ID
 ; --------------------------------------------------------------------
@@ -25,16 +25,16 @@ static window_title:data
 
 section .data
 id: dd 0
-global id:data
+static id:data
 
 id_base: dd 0
-global id_base:data
+static id_base:data
 
 id_mask: dd 0
-global id_mask:data
+static id_mask:data
 
 root_visual_id: dd 0
-global root_visual_id:data
+static root_visual_id:data
 
 section .text
 ; Connect to the X11 Server
@@ -233,7 +233,7 @@ global x11_create_gc:function
                               ; Unused - 1 Byte
   mov WORD [rsp + 2], 7       ; Request length - 4 + n
   mov DWORD [rsp + 4], r10d   ; cid
-  mov DWORD [rsp + 8], r9d   ; Drawable
+  mov DWORD [rsp + 8], r9d    ; Drawable
   mov DWORD [rsp + 12], ecx   ; Value mask
   mov DWORD [rsp + 16], 0xFFFF; Foregroung colour
   mov DWORD [rsp + 20], 0     ; Background colour
@@ -363,6 +363,8 @@ failure:
 static failure:function
   exit 1
 
+; Read X11 Server response
+; @return rax First byte of response
 x11_read_response:
 global x11_read_response:function
   push rbp
@@ -375,12 +377,14 @@ global x11_read_response:function
   mov rdx, 32
   syscall
 
+  movzx rax, BYTE [rsp]
+
   add rsp, 32
   pop rbp
   ret
 
 x11_read_error:
-static x11_read_error:function
+global x11_read_error:function
   push rbp
   mov rbp, rsp
   sub rsp, 32
@@ -398,5 +402,64 @@ static x11_read_error:function
   syscall
 
   add rsp, 32
+  pop rbp
+  ret
+
+x11_create_colormap:
+static x11_create_colormap:function
+  push rbp
+  mov rbp, rsp
+  sub rsp, 16
+
+  ; Get Colormap ID (eax) 
+  call x11_next_id 
+  mov r12d, eax
+
+  mov edx, DWORD [root_visual_id] ; Root Visual ID
+
+  mov BYTE [rsp], 78        ; CreateColormap Opcode
+  mov BYTE [rsp + 1], 0     ; Alloc - None 
+  mov WORD [rsp + 2], 4     ; Request length
+  mov DWORD [rsp + 4], r12d ; Colormap ID
+  mov DWORD [rsp + 8], r13d ; Window ID
+  mov DWORD [rsp + 12], edx ; Visual ID
+
+  mov rax, SYSCALL_WRITE
+  mov rdi, r8
+  lea rsi, [rsp]
+  mov rdx, 16 
+  syscall
+  cmp rax, 16
+  jne failure
+
+  add rsp, 16
+  pop rbp
+  ret
+
+x11_draw_rectangle:
+global x11_draw_rectangle:function
+  push rbp
+  mov rbp, rsp
+  sub rsp, 20
+
+  mov BYTE [rsp], 70        ; PolyFillRectangle Opcode
+                            ; Unused - 1 byte
+  mov WORD [rsp + 2], 5     ; Request length: 3 + 2n
+  mov DWORD [rsp + 4], r13d ; Drawable 
+  mov DWORD [rsp + 8], r10d ; GC
+  mov WORD [rsp + 12], 300  ; Rectangle x
+  mov WORD [rsp + 14], 200  ; Rectangle y
+  mov WORD [rsp + 16], 200  ; Rectangle width
+  mov WORD [rsp + 18], 200  ; Rectangle height
+
+  mov rax, SYSCALL_WRITE
+  mov rdi, r8
+  lea rsi, [rsp]
+  mov rdx, 20
+  syscall
+  cmp rax, 20
+  jne failure
+
+  add rsp, 20
   pop rbp
   ret

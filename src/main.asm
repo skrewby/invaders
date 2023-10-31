@@ -5,11 +5,14 @@ CPU x64
 
 extern x11_init
 extern x11_read_response
+extern x11_draw_rectangle
+extern x11_read_error
 
 section .text
 _start:
 global _start:function
   call x11_init
+  sub rsp, 32
 
 ; struct pollfd {
   ; int fd;
@@ -20,6 +23,8 @@ global _start:function
   mov DWORD [rsp + 8], 0
   ; }
 
+  mov BYTE [rsp + 24], 0  ; bool exposed = false
+
   .loop:
     mov rax, SYSCALL_POLL     
     lea rdi, [rsp]    ; struct pollfd *fds 
@@ -27,14 +32,28 @@ global _start:function
     mov rdx, -1       ; int timeout
     syscall
 
-    call x11_read_response
-
     cmp rax, 0
     jle failure 
     cmp DWORD [rsp + 8], POLLERR
     je failure 
     cmp DWORD [rsp + 8], POLLHUP
     je failure 
+
+    call x11_read_response
+    cmp rax, 0xc
+    jnz .rec_other_event
+
+    .rec_exposed_event:
+      mov BYTE [rsp + 24], 1  ; exposed = true
+
+    .rec_other_event:
+
+    ; if (exposed == true)
+    cmp BYTE [rsp + 24], 1    
+    jnz .loop
+
+    .draw:
+      call x11_draw_rectangle
 
     jmp .loop
 
