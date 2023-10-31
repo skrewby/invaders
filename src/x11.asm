@@ -71,7 +71,6 @@ global x11_init:function
   call x11_create_window
   call x11_map_window
   call x11_set_window_title
-  call x11_read_error
 
   set_socket_non_blocking r8
 
@@ -365,7 +364,7 @@ static failure:function
   exit 1
 
 x11_read_response:
-static x11_read_response:function
+global x11_read_response:function
   push rbp
   mov rbp, rsp
   sub rsp, 32
@@ -381,7 +380,7 @@ static x11_read_response:function
   ret
 
 x11_read_error:
-static x11_read_response:function
+static x11_read_error:function
   push rbp
   mov rbp, rsp
   sub rsp, 32
@@ -397,46 +396,6 @@ static x11_read_response:function
   lea rsi, [rsp]
   mov rdx, 32
   syscall
-
-  add rsp, 32
-  pop rbp
-  ret
-
-
-
-; Poll and respond to events from X11 server
-x11_poll_events:
-global x11_poll_events:function
-  push rbp
-  mov rbp, rsp
-  sub rsp, 32
-
-  mov DWORD [rsp + 0], r8d 
-  mov DWORD [rsp + 4], 1
-  mov DWORD [rsp + 8], 0
-  mov DWORD [rsp + 12], 0
-  mov DWORD [rsp + 16], r13d  ; Window ID
-  mov DWORD [rsp + 20], r10d  ; GC ID
-  mov BYTE [rsp + 24], 0 
-  mov BYTE [rsp + 28], 0 
-
-  .loop:
-    mov rax, SYSCALL_POLL
-    lea rdi, [rsp]
-    mov rsi, 1
-    mov rdx, -1
-    syscall
-
-    call x11_read_response
-
-    cmp rax, 0
-    jle failure 
-    cmp DWORD [rsp + 8], 0x08
-    je failure 
-    cmp DWORD [rsp + 8], 0x10 
-    je failure 
-
-    jmp .loop
 
   add rsp, 32
   pop rbp
